@@ -1,15 +1,17 @@
+- debug:
+    msg: "{{item.state}} {{item.machines|last}}"
+  with_items: '{{vms}}'
+  
+
 - name: Upgrade host
   # TODO: change to ovirt_hosts, when Ansible 2.6 is out:
-  ovirt_hosts_26:
+  ovirt_vms:
     auth: "{{ ovirt_auth }}"
     name: "{{ async_item.name }}"
-    state: upgraded
-    check_upgrade: "{{ check_upgrade }}"
-    reboot_after_upgrade: "{{ reboot_after_upgrade }}"
-    timeout: "{{ upgrade_timeout }}"
+    state: "{{ state }}"
   async: 900
   poll: 0
-  with_items: "{{ hosts }}"
+  with_items: "{{ vms }}"
   loop_control:
     loop_var: "async_item"
   register: async_results

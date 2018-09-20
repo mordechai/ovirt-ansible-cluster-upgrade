@@ -26,6 +26,10 @@
         pattern: "cluster={{ cluster_name | mandatory }} {{ check_upgrade | ternary('', 'update_available=true') }} {{ host_names | map('regex_replace', '(.*)', 'name=\\1') | list | join(' or ') }} {{ host_statuses | map('regex_replace', '(.*)', 'status=\\1') | list | join(' or ') }}"
       check_mode: "no"
 
+    - name: Remove me
+      debug: 
+        msg: "hosts are: {{ovirt_hosts}}"
+
     - name: Check if there are hosts to be updated
       debug:
         msg: "No hosts to be updated"
@@ -40,24 +44,40 @@
             auth: "{{ ovirt_auth }}"
             pattern: "cluster={{ cluster_name }}"
           check_mode: "no"
+          when: stopped_vms is undefined
+   
+        - name: Get list of VMs in cluster
+          ovirt_vms_facts:
+            auth: "{{ ovirt_auth }}"
+            pattern: "cluster={{ cluster_name }} and status=up"
+          check_mode: "no"
+          register: stopped_vms
+          when: "stopped_vms is defined and stopped_vms == '*'"
+
 
         - name: Shutdown VMs which can be stopped
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            state: stopped
-            name: "{{ item }}"
-            force: true
+          include: vms.yml
+          loop_control:
+                loop_var: vms
+                     # - "{{ stopped_vms |  batch(vm_concurrency|int|default(1) ) | list  }}"
+          vars:
+            vm:
+              state: 'stopped'
+              machines: "{{ stopped_vms |  batch(vm_concurrency|int|default(1) ) | list  }}"
           with_items:
-            - "{{ stopped_vms | default([]) }}"
+             - "{{vm}}"
+          when: stopped_vms | default([]) | length > 0
 
         - include: pinned_vms.yml
 
         # Update only those hosts that aren't in list of hosts were VMs are pinned
         # or if stop_non_migratable_vms is enabled, which means we stop pinned VMs
         - include: upgrade.yml
+          loop_control:
+                loop_var: hosts
           with_items:
-            - "{{ ovirt_hosts }}"
-          when: "item.id not in host_ids or stop_non_migratable_vms"
+            - "{{ ovirt_hosts | batch(number_of_hosts_to_upgrade_concurrently|int|default(1) ) | list  }}"
+          when: "hosts.id not in host_ids or stop_non_migratable_vms"
 
       when: ovirt_hosts | length > 0
       always:
@@ -68,22 +88,41 @@
             scheduling_policy: "{{ cluster_scheduling_policy }}"
           when: use_maintenance_policy and cluster_policy.changed | default(false)
 
+        # - name: Start again stopped VMs
+        #   ovirt_vms:
+        #     auth: "{{ ovirt_auth }}"
+        #     name: "{{ item }}"
+        #   ignore_errors: "yes"
+        #   with_items:
+        #     - "{{ stopped_vms | default([]) }}"
+
         - name: Start again stopped VMs
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            name: "{{ item }}"
-          ignore_errors: "yes"
-          with_items:
-            - "{{ stopped_vms | default([]) }}"
+          include: vms.yml
+          loop_control:
+                loop_var: vms
+          with_nested:
+            - "{{ stopped_vms | batch(vm_concurrency|int|default(1) ) | list  }}"
+            - 'running'
+          when: stopped_vms | default([]) | length > 0
+
+        # - name: Start again pin to host VMs
+        #   ovirt_vms:
+        #     auth: "{{ ovirt_auth }}"
+        #     name: "{{ item }}"
+        #   ignore_errors: "yes"
+        #   with_items:
+        #     - "{{ pinned_vms_names | default([]) }}"
+        #   when: "stop_non_migratable_vms"
 
         - name: Start again pin to host VMs
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            name: "{{ item }}"
-          ignore_errors: "yes"
-          with_items:
-            - "{{ pinned_vms_names | default([]) }}"
-          when: "stop_non_migratable_vms"
+          include: vms.yml
+          loop_control:
+                loop_var: vms
+          with_nested:
+            - "{{ pinned_vms_names | batch(vm_concurrency|int|default(1) ) | list  }}"
+            - 'running'
+          when: 'stop_non_migratable_vms'
+            
 
   always:
     - name: Logout from oVirt
