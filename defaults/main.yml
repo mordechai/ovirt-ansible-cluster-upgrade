@@ -7,6 +7,7 @@ check_upgrade: false
 reboot_after_upgrade: true
 use_maintenance_policy: true
 number_of_hosts_to_upgrade_concurrently: 10
+vm_concurrency: 20
 host_statuses:
   - up
 host_names:

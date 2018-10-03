@@ -1,17 +1,18 @@
 - debug:
-    msg: "{{item.state}} {{item.machines|last}}"
-  with_items: '{{vms}}'
+    msg: "{{vm.state}} {{item}} and total of {{machines|length}}"
+  with_items: '{{machines}}'
   
 
 - name: Upgrade host
   # TODO: change to ovirt_hosts, when Ansible 2.6 is out:
   ovirt_vms:
     auth: "{{ ovirt_auth }}"
-    name: "{{ async_item.name }}"
-    state: "{{ async_item.state }}"
+    name: "{{ async_item }}"
+    state: "{{ vm.state }}"
   async: 900
   poll: 0
-  with_items: "{{ vms }}"
+  with_items:
+    - "{{ machines }}"
   loop_control:
     loop_var: "async_item"
   register: async_results

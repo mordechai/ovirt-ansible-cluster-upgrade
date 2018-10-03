@@ -52,29 +52,28 @@
 
 
         - name: Shutdown VMs which can be stopped
-          include: vms.yml
-          loop_control:
-                label: vms
           vars:
             vm:
               state: 'stopped'
-              machines: "{{ ovirt_vms | default([]) | batch(vm_concurrency|int|default(1) ) | list  }}"
+            machines: "{{item}}"
+          include: vms.yml
           with_items:
-             - "{{vm}}"
+             - "{{ ovirt_vms |  map(attribute='name') | default([]) | batch(vm_concurrency) | list  }}"
           when: 
             - "ovirt_vms | default([]) | length > 0"
 
         - name: Shutdown VMs which can be stopped
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            state: stopped
-            name: "{{ item }}"
-            force: true
+          vars:
+            vm:
+              state: 'stopped'
+            machines: "{{item}}"
+          include: vms.yml
           with_items:
-            - "{{ stopped_vms | default([]) }}"
+             - "{{ stopped_vms | default([]) |  batch(vm_concurrency) | list  }}"
           when: 
             - "stopped_vms is defined and stopped_vms != '*'" 
             - "stopped_vms | default([]) | length > 0"
+
 
         - include: pinned_vms.yml
 
@@ -98,49 +97,38 @@
 
 
         - name: Start again stopped VMs
-          include: vms.yml
-          loop_control:
-                label: vms
           vars:
             vm:
               state: 'running'
-              machines: "{{ ovirt_vms | default([]) | batch(vm_concurrency|int|default(1) ) | list  }}"
+            machines: "{{item}}"
+          include: vms.yml
           with_items:
-             - "{{vm}}"
+             - "{{ ovirt_vms |  map(attribute='name') | default([]) | batch(vm_concurrency) | list  }}"
           when: 
             - "ovirt_vms | default([]) | length > 0"
 
         - name: Start again stopped VMs
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            state: running
-            name: "{{ item }}"
-            force: true
+          vars:
+            vm:
+              state: 'running'
+            machines: "{{item}}"
+          include: vms.yml
           with_items:
-            - "{{ stopped_vms | default([]) }}"
+             - "{{ stopped_vms | default([]) |  batch(vm_concurrency) | list  }}"
           when: 
             - "stopped_vms is defined and stopped_vms != '*'" 
             - "stopped_vms | default([]) | length > 0"
 
         - name: Start again pin to host VMs
-          ovirt_vms:
-            auth: "{{ ovirt_auth }}"
-            state: running
-            name: "{{ item }}"
-            force: true
+          vars:
+            vm:
+              state: 'running'
+            machines: "{{item}}"
+          include: vms.yml
           with_items:
-            - "{{ pinned_vms_names | default([]) }}"
-          when: "stop_non_migratable_vms" 
-
-        # - name: Start again pin to host VMs
-        #   include: vms.yml
-        #   loop_control:
-        #         loop_var: vms
-        #   with_nested:
-        #     - "{{ pinned_vms_names | batch(vm_concurrency|int|default(1) ) | list  }}"
-        #     - 'running'
-        #   when: 'stop_non_migratable_vms'
-            
+             - "{{ pinned_vms_names | default([]) |  batch(vm_concurrency) | list  }}"
+          when: 
+            - "stop_non_migratable_vms" 
 
   always:
     - name: Logout from oVirt
