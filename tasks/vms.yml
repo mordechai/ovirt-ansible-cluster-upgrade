@@ -8,7 +8,7 @@
   ovirt_vms:
     auth: "{{ ovirt_auth }}"
     name: "{{ async_item.name }}"
-    state: "{{ state }}"
+    state: "{{ async_item.state }}"
   async: 900
   poll: 0
   with_items: "{{ vms }}"

@@ -1,5 +1,6 @@
 - name: ovirt-ansible-cluster-upgrade
   hosts: population-driver
+  strategy: debug
   # connection: local
   gather_facts: false
 
@@ -8,10 +9,12 @@
     engine_user: admin@internal
     engine_password: qum5net
     #engine_cafile: /etc/pki/ovirt-engine/ca.pem
-    number_of_hosts_to_upgrade_concurrently: 2
+    number_of_hosts_to_upgrade_concurrently: 10
+    host_statuses: 
+        - 'up'
     vm_concurrency: 10
 
-    cluster_name: sep_cluster
+    cluster_name: L3_nested
     stopped_vms: '*'
     #  - openshift-master-0
     #  - openshift-node-0

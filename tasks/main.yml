@@ -26,10 +26,6 @@
         pattern: "cluster={{ cluster_name | mandatory }} {{ check_upgrade | ternary('', 'update_available=true') }} {{ host_names | map('regex_replace', '(.*)', 'name=\\1') | list | join(' or ') }} {{ host_statuses | map('regex_replace', '(.*)', 'status=\\1') | list | join(' or ') }}"
       check_mode: "no"
 
-    - name: Remove me
-      debug: 
-        msg: "hosts are: {{ovirt_hosts}}"
-
     - name: Check if there are hosts to be updated
       debug:
         msg: "No hosts to be updated"
@@ -44,29 +40,41 @@
             auth: "{{ ovirt_auth }}"
             pattern: "cluster={{ cluster_name }}"
           check_mode: "no"
-          when: stopped_vms is undefined
+          when: "stopped_vms is undefined"
    
         - name: Get list of VMs in cluster
           ovirt_vms_facts:
             auth: "{{ ovirt_auth }}"
             pattern: "cluster={{ cluster_name }} and status=up"
           check_mode: "no"
-          register: stopped_vms
+          register: list_of_vms
           when: "stopped_vms is defined and stopped_vms == '*'"
 
 
         - name: Shutdown VMs which can be stopped
           include: vms.yml
           loop_control:
-                loop_var: vms
-                     # - "{{ stopped_vms |  batch(vm_concurrency|int|default(1) ) | list  }}"
+                label: vms
           vars:
             vm:
               state: 'stopped'
-              machines: "{{ stopped_vms |  batch(vm_concurrency|int|default(1) ) | list  }}"
+              machines: "{{ ovirt_vms | default([]) | batch(vm_concurrency|int|default(1) ) | list  }}"
           with_items:
              - "{{vm}}"
-          when: stopped_vms | default([]) | length > 0
+          when: 
+            - "ovirt_vms | default([]) | length > 0"
+
+        - name: Shutdown VMs which can be stopped
+          ovirt_vms:
+            auth: "{{ ovirt_auth }}"
+            state: stopped
+            name: "{{ item }}"
+            force: true
+          with_items:
+            - "{{ stopped_vms | default([]) }}"
+          when: 
+            - "stopped_vms is defined and stopped_vms != '*'" 
+            - "stopped_vms | default([]) | length > 0"
 
         - include: pinned_vms.yml
 
@@ -88,40 +96,50 @@
             scheduling_policy: "{{ cluster_scheduling_policy }}"
           when: use_maintenance_policy and cluster_policy.changed | default(false)
 
-        # - name: Start again stopped VMs
-        #   ovirt_vms:
-        #     auth: "{{ ovirt_auth }}"
-        #     name: "{{ item }}"
-        #   ignore_errors: "yes"
-        #   with_items:
-        #     - "{{ stopped_vms | default([]) }}"
 
         - name: Start again stopped VMs
           include: vms.yml
           loop_control:
-                loop_var: vms
-          with_nested:
-            - "{{ stopped_vms | batch(vm_concurrency|int|default(1) ) | list  }}"
-            - 'running'
-          when: stopped_vms | default([]) | length > 0
+                label: vms
+          vars:
+            vm:
+              state: 'running'
+              machines: "{{ ovirt_vms | default([]) | batch(vm_concurrency|int|default(1) ) | list  }}"
+          with_items:
+             - "{{vm}}"
+          when: 
+            - "ovirt_vms | default([]) | length > 0"
 
-        # - name: Start again pin to host VMs
-        #   ovirt_vms:
-        #     auth: "{{ ovirt_auth }}"
-        #     name: "{{ item }}"
-        #   ignore_errors: "yes"
-        #   with_items:
-        #     - "{{ pinned_vms_names | default([]) }}"
-        #   when: "stop_non_migratable_vms"
+        - name: Start again stopped VMs
+          ovirt_vms:
+            auth: "{{ ovirt_auth }}"
+            state: running
+            name: "{{ item }}"
+            force: true
+          with_items:
+            - "{{ stopped_vms | default([]) }}"
+          when: 
+            - "stopped_vms is defined and stopped_vms != '*'" 
+            - "stopped_vms | default([]) | length > 0"
 
         - name: Start again pin to host VMs
-          include: vms.yml
-          loop_control:
-                loop_var: vms
-          with_nested:
-            - "{{ pinned_vms_names | batch(vm_concurrency|int|default(1) ) | list  }}"
-            - 'running'
-          when: 'stop_non_migratable_vms'
+          ovirt_vms:
+            auth: "{{ ovirt_auth }}"
+            state: running
+            name: "{{ item }}"
+            force: true
+          with_items:
+            - "{{ pinned_vms_names | default([]) }}"
+          when: "stop_non_migratable_vms" 
+
+        # - name: Start again pin to host VMs
+        #   include: vms.yml
+        #   loop_control:
+        #         loop_var: vms
+        #   with_nested:
+        #     - "{{ pinned_vms_names | batch(vm_concurrency|int|default(1) ) | list  }}"
+        #     - 'running'
+        #   when: 'stop_non_migratable_vms'
             
 
   always:
